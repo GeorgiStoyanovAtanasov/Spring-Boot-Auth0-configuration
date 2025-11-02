@@ -1,5 +1,6 @@
 package com.example.helloworld.config.security;
 
+import com.example.helloworld.config.CustomJwtAuthConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -8,6 +9,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+
 
 import lombok.RequiredArgsConstructor;
 
@@ -19,26 +22,26 @@ public class SecurityConfig {
     private final AuthenticationErrorHandler authenticationErrorHandler;
 
     @Bean
-    public SecurityFilterChain httpSecurity(final HttpSecurity http) throws Exception {
-        return http
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/messages/protected", "/api/messages/admin").authenticated()
-                        .anyRequest().permitAll())
-                .cors(Customizer.withDefaults())
-                .oauth2ResourceServer(oauth2 -> oauth2
-                                .jwt(jwt -> jwt.jwtAuthenticationConverter(makePermissionsConverter()))
-                                .authenticationEntryPoint(authenticationErrorHandler))
-                .build();
+    public JwtAuthenticationConverter customJwtAuthenticationConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(new CustomJwtAuthConverter());
+        return converter;
     }
 
-    private JwtAuthenticationConverter makePermissionsConverter() {
-        final var jwtAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        jwtAuthoritiesConverter.setAuthoritiesClaimName("permissions");
-        jwtAuthoritiesConverter.setAuthorityPrefix("");
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        final var jwtAuthConverter = new JwtAuthenticationConverter();
-        jwtAuthConverter.setJwtGrantedAuthoritiesConverter(jwtAuthoritiesConverter);
+        http
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/messages/public").permitAll()
+                        .requestMatchers("/api/messages/protected").authenticated()
+                        .requestMatchers("/api/messages/admin").hasRole("Admin")
+                        .anyRequest().authenticated()
+                )
+                .oauth2ResourceServer(oauth2 ->
+                        oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(customJwtAuthenticationConverter()))
+                );
 
-        return jwtAuthConverter;
+        return http.build();
     }
 }
